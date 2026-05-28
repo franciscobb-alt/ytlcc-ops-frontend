@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTLCC Ops Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+        .container { display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: white; border-right: 1px solid #e5e5e5; padding: 1.5rem 1rem; }
+        .sidebar h2 { font-size: 14px; font-weight: 600; margin-bottom: 1.5rem; }
+        .tab-btn { width: 100%; padding: 10px 12px; text-align: left; border: none; background: transparent; cursor: pointer; font-size: 13px; margin-bottom: 8px; border-radius: 4px; }
+        .tab-btn.active { background: #f0f0f0; font-weight: 500; }
+        .main { flex: 1; padding: 2rem; overflow-y: auto; }
+        .header h1 { font-size: 28px; font-weight: 500; margin-bottom: 8px; }
+        .header p { font-size: 13px; color: #666; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 2rem 0; }
+        .stat-card { background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 1rem; }
+        .stat-label { font-size: 11px; color: #999; margin-bottom: 8px; }
+        .stat-value { font-size: 24px; font-weight: 600; }
+        .table-card { background: white; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; margin-top: 2rem; }
+        .table-header { padding: 1rem; border-bottom: 1px solid #e5e5e5; }
+        table { width: 100%; font-size: 13px; }
+        th { padding: 12px 1rem; text-align: left; background: #fafafa; color: #666; font-weight: 500; border-bottom: 1px solid #e5e5e5; }
+        td { padding: 12px 1rem; border-bottom: 1px solid #e5e5e5; }
+        tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .badge-progress { background: #10b981; color: white; }
+        .badge-blocked { background: #ef4444; color: white; }
+        .hidden { display: none; }
+        .loading { text-align: center; padding: 2rem; color: #999; }
+        .error { color: #ef4444; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>YTLCC Ops</h2>
+            <button class="tab-btn active" onclick="switchTab('creative')">Creative Ops</button>
+            <button class="tab-btn" onclick="switchTab('work')">Work Ops</button>
+            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e5e5;">
+                <button class="tab-btn" onclick="loadData()" style="background: #f0f0f0;">Refresh</button>
+            </div>
+        </div>
+
+        <div class="main">
+            <div id="creative-tab">
+                <div class="header">
+                    <h1>Creative Ops</h1>
+                    <p>Live from your Notion Command Center</p>
+                </div>
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Items</div>
+                        <div class="stat-value" id="total">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">In Progress</div>
+                        <div class="stat-value" id="in-progress">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Blocked</div>
+                        <div class="stat-value" id="blocked">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value" id="completed">-</div>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3 style="font-size: 14px; font-weight: 500;">All Tasks</h3>
+                    </div>
+                    <div id="tasks-container">
+                        <div class="loading">Loading tasks from Notion...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="work-tab" class="hidden">
+                <div class="header">
+                    <h1>Work Ops</h1>
+                    <p>Live from your Notion Command Center</p>
+                </div>
+                <div style="text-align: center; padding: 3rem; color: #999;">
+                    Coming soon - same data, different view
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://ytlcc-ops-backend-production.up.railway.app';
+
+        function switchTab(tab) {
+            document.getElementById('creative-tab').classList.toggle('hidden', tab !== 'creative');
+            document.getElementById('work-tab').classList.toggle('hidden', tab !== 'work');
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', (i === 0 && tab === 'creative') || (i === 1 && tab === 'work'));
+            });
+        }
+
+        async function loadData() {
+            try {
+                const [tasksRes, statsRes] = await Promise.all([
+                    fetch(`${API_URL}/api/tasks`),
+                    fetch(`${API_URL}/api/stats`)
+                ]);
+
+                if (!tasksRes.ok || !statsRes.ok) throw new Error('Failed to fetch');
+
+                const tasksData = await tasksRes.json();
+                const statsData = await statsRes.json();
+
+                document.getElementById('total').textContent = statsData.total;
+                document.getElementById('in-progress').textContent = statsData.inProgress;
+                document.getElementById('blocked').textContent = statsData.blocked;
+                document.getElementById('completed').textContent = statsData.completed;
+
+                const table = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Task Name</th>
+                                <th>Status</th>
+                                <th>Department</th>
+                                <th>Assignee</th>
+                                <th>Due Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tasksData.tasks.map(task => `
+                                <tr>
+                                    <td><strong>${task.name}</strong></td>
+                                    <td><span class="badge badge-progress">${task.status}</span></td>
+                                    <td>${task.department || 'N/A'}</td>
+                                    <td>${task.assignee}</td>
+                                    <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('tasks-container').innerHTML = table;
+            } catch (err) {
+                document.getElementById('tasks-container').innerHTML = `<div class="error">Error: ${err.message}</div>`;
+            }
+        }
+
+        // Load on start
+        loadData();
+    </script>
+</body>
+</html>
